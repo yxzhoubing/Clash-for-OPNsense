@@ -30,7 +30,6 @@ sh install.sh
 sh uninstall.sh
 ```
 
-## 使用方法
-请参考以下文章：
+## 配置方法
 
-[OPNsense配置clash(mihomo)透明代理教程](https://pfchina.org/?p=14148)
+[OPNsense 配置 clash(mihomo) 透明代理教程](https://pfchina.org/?p=14148)
