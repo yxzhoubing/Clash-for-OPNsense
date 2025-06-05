@@ -93,6 +93,12 @@ function handle_form_submission() {
 
         if (isset($_POST['action']) && $_POST['action'] === '立即订阅') {
             clear_log();
+
+            // 清除临时文件
+            @unlink("/usr/local/etc/clash/sub/temp/clash_config.yaml");
+            @unlink("/usr/local/etc/clash/sub/temp/proxies.txt");
+            @unlink("/usr/local/etc/clash/sub/temp/config.yaml");
+
             $cmd = escapeshellcmd("bash /usr/local/etc/clash/sub/sub.sh");
             exec($cmd . " >> " . LOG_FILE . " 2>&1", $output_lines, $return_var);
             log_message("订阅操作执行完毕。");
