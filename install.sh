@@ -70,7 +70,8 @@ fi
 
 # 启动Tun接口
 log "$YELLOW" "启动clash..."
-service clash start > /dev/null 2>&1
+service clash restart > /dev/null 2>&1
+service mosdns restart > /dev/null 2>&1
 echo ""
 
 # 备份配置文件
@@ -81,35 +82,36 @@ cp "$CONFIG_FILE" "$BACKUP_FILE" || {
 }
 
 # 添加tun接口
-log "$YELLOW" "添加tun接口..."
+log "$YELLOW" "添加 tun_3000 接口..."
+sleep 1
 if grep -q "<if>tun_3000</if>" "$CONFIG_FILE"; then
   echo "存在同名接口，忽略"
-  echo ""
 else
   awk '
   BEGIN { inserted = 0 }
-  /<interfaces>/ { print; next }
-  /<\/interfaces>/ && inserted == 0 {
-    print "    <tun_3000>"
-    print "      <if>tun_3000</if>"
-    print "      <descr>TUN</descr>"
-    print "      <enable>1</enable>"
-    print "      <spoofmac/>"
-    print "      <gateway_interface>1</gateway_interface>"
-    print "      <ipaddr>10.10.0.1</ipaddr>"
-    print "      <subnet>32</subnet>"
-    print "    </tun_3000>"
-    inserted = 1
+  {
+    print
+    if ($0 ~ /<\/lo0>/ && inserted == 0) {
+      print "    <opt10>"
+      print "      <if>tun_3000</if>"
+      print "      <descr>TUN</descr>"
+      print "      <enable>1</enable>"
+      print "      <spoofmac/>"
+      print "      <gateway_interface>1</gateway_interface>"
+      print "      <ipaddr>172.19.0.2</ipaddr>"
+      print "      <subnet>30</subnet>"
+      print "    </opt10>"
+      inserted = 1
+    }
   }
-  { print }
   ' "$CONFIG_FILE" > "$TMP_FILE" && mv "$TMP_FILE" "$CONFIG_FILE"
   echo "接口添加完成"
-  echo ""
 fi
+echo ""
 
 # 添加防火墙规则（将流量导入TUN_GW）
 log "$YELLOW" "添加分流规则..."
-if grep -q "<gateway>TUN_GW</gateway>" "$CONFIG_FILE"; then
+if grep -q "c0398153-597b-403b-9069-734734b46497" "$CONFIG_FILE"; then
   echo "存在同名规则，忽略"
   echo ""
 else
@@ -132,13 +134,27 @@ else
     print "        <any>1</any>"
     print "      </destination>"
     print "    </rule>"
+    print "    <rule uuid=\"af644e95-89a5-45a3-86c3-959f406a2a6a\">"
+    print "      <type>pass</type>"
+    print "      <interface>opt10</interface>"
+    print "      <ipprotocol>inet</ipprotocol>"
+    print "      <statetype>keep state</statetype>"
+    print "      <direction>in</direction>"
+    print "      <quick>1</quick>"
+    print "      <source>"
+    print "        <any>1</any>"
+    print "      </source>"
+    print "      <destination>"
+    print "        <any>1</any>"
+    print "      </destination>"
+    print "    </rule>"
     next
   }
   { print }
   ' "$CONFIG_FILE" > "$TMP_FILE" && mv "$TMP_FILE" "$CONFIG_FILE"
   echo "规则添加完成"
-  echo ""
 fi
+  echo ""
 
 # 更改Unbound端口为 5355
 sleep 1
@@ -312,12 +328,6 @@ echo ""
 log "$YELLOW" "重新载入configd..."
 service configd restart > /dev/null 2>&1
 echo ""
-
-# 重启所有服务
-# log "$YELLOW" "应用所有更改，请稍等..."
-# /usr/local/etc/rc.reload_all >/dev/null 2>&1
-# echo "所有服务已重新加载！"
-# echo ""
 
 # 完成提示
 log "$GREEN" "安装完毕，请刷新浏览器，导航到VPN > Proxy Suite 进行配置。配置完成，请重启防火墙让新配置生效。"
