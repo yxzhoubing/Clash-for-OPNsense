@@ -80,9 +80,8 @@ cp "$CONFIG_FILE" "$BACKUP_FILE" || {
 
 # 添加tun接口
 log "$YELLOW" "添加 tun_3000 接口..."
-sleep 1
 if grep -q "<if>tun_3000</if>" "$CONFIG_FILE"; then
-  echo "存在同名接口，忽略"
+  log "$CYAN" "存在同名接口，忽略"
 else
   awk '
   BEGIN { inserted = 0 }
@@ -93,10 +92,6 @@ else
       print "      <if>tun_3000</if>"
       print "      <descr>TUN</descr>"
       print "      <enable>1</enable>"
-      print "      <spoofmac/>"
-      print "      <gateway_interface>1</gateway_interface>"
-      print "      <ipaddr>172.19.0.2</ipaddr>"
-      print "      <subnet>30</subnet>"
       print "    </opt10>"
       inserted = 1
     }
@@ -106,32 +101,15 @@ else
 fi
 echo ""
 
-# 添加防火墙规则（将流量导入TUN_GW）
-log "$YELLOW" "添加分流规则..."
+# 添加防火墙规则（允许TUN子网互访问）
+log "$YELLOW" "添加防火墙规则..."
 if grep -q "c0398153-597b-403b-9069-734734b46497" "$CONFIG_FILE"; then
-  echo "存在同名规则，忽略"
-  echo ""
+  log "$CYAN" "存在同名规则，忽略"
 else
   awk '
   /<filter>/ {
     print
     print "    <rule uuid=\"c0398153-597b-403b-9069-734734b46497\">"
-    print "      <type>pass</type>"
-    print "      <interface>lan</interface>"
-    print "      <ipprotocol>inet</ipprotocol>"
-    print "      <statetype>keep state</statetype>"
-    print "      <gateway>TUN_GW</gateway>"
-    print "      <direction>in</direction>"
-    print "      <floating>yes</floating>"
-    print "      <quick>1</quick>"
-    print "      <source>"
-    print "        <network>lan</network>"
-    print "      </source>"
-    print "      <destination>"
-    print "        <any>1</any>"
-    print "      </destination>"
-    print "    </rule>"
-    print "    <rule uuid=\"af644e95-89a5-45a3-86c3-959f406a2a6a\">"
     print "      <type>pass</type>"
     print "      <interface>opt10</interface>"
     print "      <ipprotocol>inet</ipprotocol>"
@@ -139,10 +117,10 @@ else
     print "      <direction>in</direction>"
     print "      <quick>1</quick>"
     print "      <source>"
-    print "        <any>1</any>"
+    print "        <network>opt10</network>"
     print "      </source>"
     print "      <destination>"
-    print "        <any>1</any>"
+    print "        <network>opt10</network>"
     print "      </destination>"
     print "    </rule>"
     next
@@ -231,101 +209,21 @@ else
 fi
 echo ""
 
-# 添加订阅和更新任务
-log "$YELLOW" "添加订阅和GeoIP（程序）更新任务..."
-insert_job_if_missing() {
-  CMD="$1"
-  JOB_XML="$2"
-
-  if grep -q "<command>$CMD</command>" "$CONFIG_FILE"; then
-    echo "任务已存在: $CMD，跳过插入。"
-    return
-  fi
-
-  echo "插入任务: $CMD"
-  echo "$JOB_XML" > /tmp/job_insert.xml
-
-  if grep -q "<jobs/>" "$CONFIG_FILE"; then
-    # 如果是空的 <jobs/>，替换为 <jobs>...内容...</jobs>
-    awk -v jobfile="/tmp/job_insert.xml" '
-      /<jobs\/>/ {
-        print "<jobs>"
-        while ((getline line < jobfile) > 0) print line
-        print "</jobs>"
-        next
-      }
-      { print }
-    ' "$CONFIG_FILE" > "$TMP_FILE" && mv "$TMP_FILE" "$CONFIG_FILE"
-  elif grep -q "<jobs>" "$CONFIG_FILE"; then
-    # 否则插入到 </jobs> 前
-    awk -v jobfile="/tmp/job_insert.xml" '
-      /<\/jobs>/ {
-        while ((getline line < jobfile) > 0) print line
-      }
-      { print }
-    ' "$CONFIG_FILE" > "$TMP_FILE" && mv "$TMP_FILE" "$CONFIG_FILE"
-  else
-    echo "错误：未找到 <jobs> 或 <jobs/> 标签，无法插入任务。" >&2
-  fi
-
-  rm -f /tmp/job_insert.xml
-}
-
-# Job 1 内容
-JOB1='        <job uuid="5f284598-ed63-4aa6-845a-f53882583dd7">
-          <origin>cron</origin>
-          <enabled>1</enabled>
-          <minutes>0</minutes>
-          <hours>2</hours>
-          <days>6</days>
-          <months>*</months>
-          <weekdays>*</weekdays>
-          <who>root</who>
-          <command>mosdns update</command>
-          <parameters/>
-          <description>&#x66F4;&#x65B0;&#x4EE3;&#x7406;&#x548C;GEO&#x6570;&#x636E;</description>
-        </job>'
-
-# Job 2 内容
-JOB2='        <job uuid="388fcf06-888e-4781-b8f9-95142ce3c71c">
-          <origin>cron</origin>
-          <enabled>1</enabled>
-          <minutes>0</minutes>
-          <hours>3</hours>
-          <days>6</days>
-          <months>*</months>
-          <weekdays>*</weekdays>
-          <who>root</who>
-          <command>clash sub-update</command>
-          <parameters/>
-          <description>Clash&#x8BA2;&#x9605;&#x66F4;&#x65B0;</description>
-        </job>'
-
-# 插入任务
-insert_job_if_missing "mosdns update" "$JOB1"
-insert_job_if_missing "clash sub-update" "$JOB2"
-echo ""
-
-# 重载 cron 服务
-log "$YELLOW" "重启cron服务..."
-/usr/local/sbin/configctl cron restart > /dev/null 2>&1
-echo ""
-
-# 重启服务Unbound
-log "$YELLOW" "重启Unbound服务..."
-/usr/local/etc/rc.d/unbound restart > /dev/null 2>&1
-echo ""
-
-# 重新载入防火墙规则
-log "$YELLOW" "重新载入防火墙规则..."
-configctl filter reload > /dev/null 2>&1
-echo ""
-
 # 重新载入configd
 log "$YELLOW" "重新载入configd..."
 service configd restart > /dev/null 2>&1
 echo ""
 
+# 重启 Unbound DNS 服务
+log "$YELLOW" "重启Unbound DNS..."
+configctl unbound restart > /dev/null 2>&1
+echo ""
+
+# 重新载入防火墙规则
+log "$YELLOW" "重新加载防火墙规则..."
+configctl filter reload > /dev/null 2>&1
+echo ""
+
 # 完成提示
-log "$GREEN" "安装完毕，请重启防火墙，导航到VPN > Proxy Suite 进行配置。"
+log "$GREEN" "安装完毕，请重启防火墙，导航到VPN > Proxy Suite 进行配置。配置过程请参考配置教程。"
 echo ""

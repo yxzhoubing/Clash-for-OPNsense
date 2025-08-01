@@ -37,8 +37,6 @@ rm -f /usr/local/opnsense/service/conf/actions.d/actions_mosdns.conf
 
 # 删除菜单和缓存
 rm -rf /usr/local/opnsense/mvc/app/models/OPNsense/Magic
-rm -f /tmp/opnsense_menu_cache.xml
-rm -f /tmp/opnsense_acl_cache.json
 
 # 删除inc
 rm -f /usr/local/etc/inc/plugins.inc.d/clash.inc
@@ -65,5 +63,5 @@ service configd restart > /dev/null 2>&1
 echo ""
 
 # 完成提示
-log "$GREEN" "卸载完成，请手动删除TUN接口、别名和浮动防火墙分流规则，任务列表的自动更新项，并将Unbound DNS端口更改为53。"
+log "$GREEN" "卸载完成，请手动删除TUN接口，将Unbound DNS端口改回53。"
 echo ""
