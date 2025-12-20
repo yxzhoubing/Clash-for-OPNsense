@@ -26,6 +26,14 @@ function clash_services()
 
     return $services;
 }
+
+function clash_configure()
+{
+    return [
+        'newwanip' => ['clash_restart'],
+    ];
+}
+
 function clash_syslog()
 {
     $logfacilities = array();
@@ -33,4 +41,10 @@ function clash_syslog()
         'facility' => array('clash'),
     );
     return $logfacilities;
+}
+
+
+function clash_restart()
+{
+    exec('sh /usr/local/etc/rc.d/clash restart');
 }
